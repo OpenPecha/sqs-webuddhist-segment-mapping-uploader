@@ -8,6 +8,7 @@ from app.models import (
 )
 from app.config import get
 import logging
+from time import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +25,41 @@ def upload_all_segments_mapping_to_webuddhist(manifestation_id: str):
         response = _upload_mapping_to_webuddhist(
             mapping = mapping
         )
-        return mapping
+        return response
     except Exception as e:
         raise e
 
 def _upload_mapping_to_webuddhist(mapping):
     try:
+        import json
+        with open("mapping_payload.json", "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, indent=4)
         token = get_token()
         we_buddhist_url = get("WEBUDDHIST_API_ENDPOINT")
         headers = {
             "Authorization": f"Bearer {token}"
         }
-        response = requests.post(f"{we_buddhist_url}/mapping", json=mapping, headers=headers)
+        logger.info(f"Uploading mapping to Webuddhist")
+        logger.info(f"Mapping payload: {mapping}")
+        
+        response = requests.post(
+            f"{we_buddhist_url}/mappings", 
+            json=mapping, 
+            headers=headers,
+            timeout=120  # 120 seconds timeout for upload
+        )
+        sleep(5)
+        logger.info(f"Upload response status: {response.status_code}")
+        logger.info(f"Response from Webuddhist: {response.text}")
+        
+        if response.status_code == 404:
+            logger.error(f"Endpoint not found. Check if '{we_buddhist_url}/mappings' is the correct endpoint")
+            raise Exception(f"WeBuddhist API endpoint not found: {we_buddhist_url}/mappings")
+        
+        if response.status_code not in [200, 201]:
+            logger.error(f"Upload failed with status {response.status_code}")
+            raise Exception(f"Upload failed: {response.status_code} - {response.text}")
+        
         return response.json()
     except Exception as e:
         raise e
@@ -119,15 +143,29 @@ def _format_all_text_segment_relation_mapping(manifestation_id: str, all_text_se
 
 def get_token()->str:
     try:
+        logger.info("Getting token from Webuddhist")
         email = get("WEBUDDHIST_LOG_IN_EMAIL")
         password = get("WEBUDDHIST_LOG_IN_PASSWORD")
 
         we_buddhist_url = get("WEBUDDHIST_API_ENDPOINT")
-
-        response = requests.post(f"{we_buddhist_url}/auth/login", json={"email": email, "password": password})
-
-        token = response.json()["accessToken"]
-
+        logger.info(f"Signing to Webuddhist at {we_buddhist_url}/auth/login")
+        response = requests.post(
+            f"{we_buddhist_url}/auth/login", 
+            json={"email": email, "password": password},
+            timeout=60  # 60 seconds timeout
+        )
+        sleep(5)
+        if response.status_code != 200:
+            logger.error(f"Login failed with status {response.status_code}: {response.text}")
+            raise Exception(f"WeBuddhist login failed: {response.status_code}")
+        
+        response_data = response.json()
+        logger.info(f"Successfully logged in to WeBuddhist")
+        
+        # Extract token from nested structure: response['auth']['access_token']
+        token = response_data["auth"]["access_token"]
+        logger.info("Successfully obtained authentication token")
+        
         return token
     except Exception as e:
         raise e
