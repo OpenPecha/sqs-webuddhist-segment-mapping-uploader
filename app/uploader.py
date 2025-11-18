@@ -43,7 +43,7 @@ def _upload_mapping_to_webuddhist(mapping):
             f"{we_buddhist_url}/mappings", 
             json=mapping, 
             headers=headers,
-            timeout=120  # 120 seconds timeout for upload
+            timeout=600  # 10 minutes timeout - WeBuddhist on Render can be very slow
         )
         sleep(5)
         logger.info(f"Upload response status: {response.status_code}")
@@ -83,6 +83,8 @@ def _prepare_webuddhist_mapping_payload(relations):
                     ]
                 })
             text_mapping["mappings"] = segment_mapping
+            if len(text_mapping["mappings"]) == 0:
+                continue
             payload["text_mappings"].append(text_mapping)
         return payload
     except Exception as e:
@@ -149,7 +151,7 @@ def get_token()->str:
         response = requests.post(
             f"{we_buddhist_url}/auth/login", 
             json={"email": email, "password": password},
-            timeout=60  # 60 seconds timeout
+            timeout=120  # 2 minutes timeout for login (cold start)
         )
         sleep(5)
         if response.status_code != 200:
