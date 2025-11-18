@@ -31,9 +31,6 @@ def upload_all_segments_mapping_to_webuddhist(manifestation_id: str):
 
 def _upload_mapping_to_webuddhist(mapping):
     try:
-        import json
-        with open("mapping_payload.json", "w", encoding="utf-8") as f:
-            json.dump(mapping, f, ensure_ascii=False, indent=4)
         token = get_token()
         we_buddhist_url = get("WEBUDDHIST_API_ENDPOINT")
         headers = {
@@ -176,17 +173,4 @@ if __name__ == "__main__":
     mapping_payload = upload_all_segments_mapping_to_webuddhist(
         manifestation_id = manifestation_id
     )
-
-    import json
-
-    with open("mapping_payload.json", "w", encoding='utf-8') as f:
-        # Use .model_dump() if this is a Pydantic model, otherwise fallback to .__dict__ or as appropriate
-        try:
-            payload_dict = mapping_payload.model_dump()
-        except AttributeError:
-            try:
-                payload_dict = mapping_payload.__dict__
-            except Exception:
-                payload_dict = mapping_payload
-        json.dump(payload_dict, f, ensure_ascii=False, indent=4)
     print("mapping_payload has been written to mapping_payload.json")
