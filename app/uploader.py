@@ -16,14 +16,16 @@ def upload_all_segments_mapping_to_webuddhist(manifestation_id: str):
     try:
         logger.info("Getting all the segments relations by manifestation")
         relations = get_all_segments_relation_by_manifestation(
-            manifestation_id = manifestation_id
+            manifestation_id=manifestation_id
         )
         logger.info("Preparing the webuddhist mapping payload")
         mapping = _prepare_webuddhist_mapping_payload(
-            relations = relations
+            relations=relations
         )
+        if mapping.get("text_mappings", None) is not None and len(mapping["text_mappings"]) <= 0:
+            return
         response = _upload_mapping_to_webuddhist(
-            mapping = mapping
+            mapping=mapping
         )
         return response
     except Exception as e:
