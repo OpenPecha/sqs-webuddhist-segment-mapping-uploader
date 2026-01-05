@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 queue_url = get("SQS_QUEUE_URL")
 region = get("AWS_REGION")
 
-logger.info(f"Initializing SQS Consumer")
-logger.info(f"Queue URL: {queue_url}")
-logger.info(f"Region: {region}")
+logger.info("Initializing SQS Consumer")
+logger.info("Queue URL: %s", queue_url)
+logger.info("Region: %s", region)
 
 if not queue_url:
     logger.error("SQS_QUEUE_URL is not set in environment variables!")
@@ -25,6 +25,7 @@ if not queue_url:
 if not region:
     logger.error("AWS_REGION is not set in environment variables!")
     raise ValueError("AWS_REGION environment variable is required")
+
 
 class SimpleConsumer(Consumer):
     def handle_message(self, message: Message):

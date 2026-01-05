@@ -1,5 +1,6 @@
 from app.db.postgres import SessionLocal
-from app.db.models import RootJob, SegmentTask
+from app.db.models import RootJob, SegmentMapping
+from sqlalchemy.inspection import inspect
 import requests
 from app.models import (
     AllTextSegmentRelationMapping,
@@ -13,16 +14,20 @@ from time import sleep
 logger = logging.getLogger(__name__)
 
 
-def upload_all_segments_mapping_to_webuddhist(text_id: str):
+def upload_all_segments_mapping_to_webuddhist(text_id: str, segment_ids: list[str]):
     try:
         logger.info("Getting all the segments relations by manifestation")
         relations = get_all_segments_by_segment_ids(
             text_id=text_id,
             segment_ids=segment_ids
         )
+        formatted_relations = _format_all_text_segment_relation_mapping(
+            text_id=text_id,
+            all_text_segment_relations=relations
+        )
         logger.info("Preparing the webuddhist mapping payload")
         mapping = _prepare_webuddhist_mapping_payload(
-            relations=relations
+            relations=formatted_relations
         )
         if mapping.get("text_mappings", None) is not None and len(mapping["text_mappings"]) <= 0:
             return
@@ -97,28 +102,22 @@ def _prepare_webuddhist_mapping_payload(relations):
             payload["text_mappings"].append(text_mapping)
             if payload.get("text_mappings", None) is not None and len(payload["text_mappings"]) <= 0:
                 continue
-            response = _upload_mapping_to_webuddhist(
-                mapping=payload
-            )
-            # logger.info(f"Response from Webuddhist: {response}")
         return payload
     except Exception as e:
         raise e
 
 
 def get_all_segments_by_segment_ids(text_id: str, segment_ids: list[str]):
-    """
-    Get all the segments by segment ids
-    """
-    try:
-        with SessionLocal() as session:
-            segments = session.query(SegmentTask).filter(
-                SegmentTask.text_id == text_id,
-                SegmentTask.segment_id.in_(segment_ids)
-            ).all()
-            return segments
-    except Exception as e:
-        raise e
+    with SessionLocal() as session:
+        segments = (
+            session.query(SegmentMapping)
+            .filter(
+                SegmentMapping.text_id == text_id,
+                SegmentMapping.segment_id.in_(segment_ids),
+            )
+            .all()
+        )
+        return segments
 
 
 def _format_all_text_segment_relation_mapping(text_id: str, all_text_segment_relations):
@@ -132,11 +131,11 @@ def _format_all_text_segment_relation_mapping(text_id: str, all_text_segment_rel
     for task in all_text_segment_relations:
         task_dict = {
             "task_id": str(task.task_id),
-            "job_id": str(task.job_id),
+            "job_id": str(task.root_job_id),
+            "text_id": str(task.text_id),
             "segment_id": task.segment_id,
             "status": task.status,
             "result_json": task.result_json,
-            "result_location": task.result_location,
             "error_message": task.error_message,
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None
@@ -146,10 +145,10 @@ def _format_all_text_segment_relation_mapping(text_id: str, all_text_segment_rel
             segment_id=task.segment_id,
             mappings=[]
         )
-        for mapping in task_dict["result_json"]:
+        for mapping in task_dict['result_json']:
             mapping_dict = Mapping(
-                text_id=mapping["text_id"],
-                segments=mapping["segments"]
+                text_id=mapping['manifestation_id'],
+                segments=mapping['segments']
             )
             segment.mappings.append(mapping_dict)
         # logger.info(f"Segment: {segment}")
