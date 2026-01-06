@@ -34,7 +34,9 @@ def upload_all_segments_mapping_to_webuddhist(
         mapping = _prepare_webuddhist_mapping_payload(
             relations=formatted_relations
         )
+        
         logger.info(f"Mapping: {mapping}")
+        
         if mapping.get("text_mappings", None) is not None and len(mapping["text_mappings"]) <= 0:
             return
         response = _upload_mapping_to_webuddhist(
@@ -48,16 +50,21 @@ def upload_all_segments_mapping_to_webuddhist(
 
 def _upload_mapping_to_webuddhist(mapping, destination_environment: str):
     try:
-        logger.info("Getting token from Webuddhist")
-        token = get_token()
+        token = get_token(destination_environment=destination_environment)
+
+        logger.info(f"Destination environment: {destination_environment}")
+
         we_buddhist_url = get(
-            f"{destination_environment}_WEBUDDHIST_API_ENDPOINT"
+            f"{destination_environment.upper()}_WEBUDDHIST_API_ENDPOINT"
         )
+        
+        logger.info(f"WeBuddhist URL: {we_buddhist_url}")
+        
         headers = {
             "Authorization": f"Bearer {token}"
         }
+        
         logger.info(f"Uploading mapping to Webuddhist")
-        # logger.info(f"Mapping payload: {mapping}")
         
         response = requests.post(
             f"{we_buddhist_url}/mappings",
@@ -67,20 +74,17 @@ def _upload_mapping_to_webuddhist(mapping, destination_environment: str):
         )
         sleep(5)
         logger.info("Uploaded mapping to webuddhist")
-        # logger.info(f"Upload response status: {response.status_code}")
-        # logger.info(f"Response from Webuddhist: {response.text}")
-        
+
         logger.info(f"Response status: {response.status_code}")
         if response.status_code == 201:
             logger.info("Mapping uploaded successfully")
 
         if response.status_code == 404:
             logger.error(response)
-        
+
         if response.status_code not in [200, 201]:
             logger.error(f"Upload failed with status {response.status_code}")
             raise Exception(f"Upload failed: {response.status_code} - {response.text}")
-
 
         return response.json()
     except Exception as e:
@@ -135,7 +139,10 @@ def get_all_segments_by_segment_ids(text_id: str, segment_ids: list[str]):
         return segments
 
 
-def _format_all_text_segment_relation_mapping(text_id: str, all_text_segment_relations):
+def _format_all_text_segment_relation_mapping(
+    text_id: str,
+    all_text_segment_relations
+):
     """
     Format all the text segment relation mapping
     """
@@ -155,7 +162,7 @@ def _format_all_text_segment_relation_mapping(text_id: str, all_text_segment_rel
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None
         }
-        # logger.info(f"Starting with formatting task: {task_dict}")
+
         segment = SegmentsRelation(
             segment_id=task.segment_id,
             mappings=[]
@@ -172,7 +179,7 @@ def _format_all_text_segment_relation_mapping(text_id: str, all_text_segment_rel
     return response
 
 
-def get_token()->str:
+def get_token(destination_environment: str) -> str:
     """
     Get token from Webuddhist
     """
@@ -181,7 +188,9 @@ def get_token()->str:
         email = get("WEBUDDHIST_LOG_IN_EMAIL")
         password = get("WEBUDDHIST_LOG_IN_PASSWORD")
 
-        we_buddhist_url = get("WEBUDDHIST_API_ENDPOINT")
+        we_buddhist_url = get(
+            f"{destination_environment}_WEBUDDHIST_API_ENDPOINT"
+        )
         logger.info(f"Signing to Webuddhist at {we_buddhist_url}/auth/login")
         response = requests.post(
             f"{we_buddhist_url}/auth/login", 
@@ -195,11 +204,11 @@ def get_token()->str:
         
         response_data = response.json()
         logger.info(f"Successfully logged in to WeBuddhist")
-        
+
         # Extract token from nested structure: response['auth']['access_token']
         token = response_data["auth"]["access_token"]
         logger.info("Successfully obtained authentication token")
-        
+
         return token
     except Exception as e:
         raise e
