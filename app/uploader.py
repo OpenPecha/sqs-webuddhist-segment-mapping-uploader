@@ -14,7 +14,12 @@ from time import sleep
 logger = logging.getLogger(__name__)
 
 
-def upload_all_segments_mapping_to_webuddhist(text_id: str, segment_ids: list[str]):
+def upload_all_segments_mapping_to_webuddhist(
+    text_id: str,
+    segment_ids: list[str],
+    source_environment: str,
+    destination_environment: str
+):
     try:
         logger.info("Getting all the segments relations by manifestation")
         relations = get_all_segments_by_segment_ids(
@@ -29,20 +34,25 @@ def upload_all_segments_mapping_to_webuddhist(text_id: str, segment_ids: list[st
         mapping = _prepare_webuddhist_mapping_payload(
             relations=formatted_relations
         )
+        logger.info(f"Mapping: {mapping}")
         if mapping.get("text_mappings", None) is not None and len(mapping["text_mappings"]) <= 0:
             return
         response = _upload_mapping_to_webuddhist(
-            mapping=mapping
+            mapping=mapping,
+            destination_environment=destination_environment
         )
         return response
     except Exception as e:
         raise e
 
 
-def _upload_mapping_to_webuddhist(mapping):
+def _upload_mapping_to_webuddhist(mapping, destination_environment: str):
     try:
+        logger.info("Getting token from Webuddhist")
         token = get_token()
-        we_buddhist_url = get("WEBUDDHIST_API_ENDPOINT")
+        we_buddhist_url = get(
+            f"{destination_environment}_WEBUDDHIST_API_ENDPOINT"
+        )
         headers = {
             "Authorization": f"Bearer {token}"
         }
@@ -50,8 +60,8 @@ def _upload_mapping_to_webuddhist(mapping):
         # logger.info(f"Mapping payload: {mapping}")
         
         response = requests.post(
-            f"{we_buddhist_url}/mappings", 
-            json=mapping, 
+            f"{we_buddhist_url}/mappings",
+            json=mapping,
             headers=headers,
             timeout=600  # 10 minutes timeout - WeBuddhist on Render can be very slow
         )
@@ -60,13 +70,18 @@ def _upload_mapping_to_webuddhist(mapping):
         # logger.info(f"Upload response status: {response.status_code}")
         # logger.info(f"Response from Webuddhist: {response.text}")
         
+        logger.info(f"Response status: {response.status_code}")
+        if response.status_code == 201:
+            logger.info("Mapping uploaded successfully")
+
         if response.status_code == 404:
             logger.error(response)
         
         if response.status_code not in [200, 201]:
             logger.error(f"Upload failed with status {response.status_code}")
             raise Exception(f"Upload failed: {response.status_code} - {response.text}")
-        
+
+
         return response.json()
     except Exception as e:
         raise e
