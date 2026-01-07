@@ -189,7 +189,7 @@ def get_token(destination_environment: str) -> str:
         password = get("WEBUDDHIST_LOG_IN_PASSWORD")
 
         we_buddhist_url = get(
-            f"{destination_environment}_WEBUDDHIST_API_ENDPOINT"
+            f"{destination_environment.upper()}_WEBUDDHIST_API_ENDPOINT"
         )
         logger.info(f"Signing to Webuddhist at {we_buddhist_url}/auth/login")
         response = requests.post(
