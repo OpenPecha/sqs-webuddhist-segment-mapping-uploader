@@ -34,12 +34,10 @@ class SimpleConsumer(Consumer):
 
             text_id = json_content["text_id"]
             segment_ids = json_content["segment_ids"]
-            source_environment = json_content["source_environment"]
             destination_environment = json_content["destination_environment"]
             upload_all_segments_mapping_to_webuddhist(
                 text_id=text_id,
                 segment_ids=segment_ids,
-                source_environment=source_environment,
                 destination_environment=destination_environment
             )
 

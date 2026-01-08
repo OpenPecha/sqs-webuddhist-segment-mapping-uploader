@@ -1,9 +1,9 @@
-from app.db.postgres import SessionLocal
 import requests
 from app.config import get
 import logging
 from time import sleep
 from app.db.models import SegmentMapping
+from app.db.postgres import SessionLocal
 from app.models import (
     AllTextSegmentRelationMapping,
     SegmentsRelation,
@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 def upload_all_segments_mapping_to_webuddhist(
     text_id: str,
     segment_ids: list[str],
-    source_environment: str,
     destination_environment: str
 ):
     try:
@@ -26,8 +25,9 @@ def upload_all_segments_mapping_to_webuddhist(
             text_id=text_id,
             segment_ids=segment_ids
         )
+        logger.info(f"Total number of segment record retrieved: {len(relations)}")
 
-        logger.info(f"Total number of relations: {len(relations)}")
+        logger.info("Formatting all segmentrecords fetched from the database")
         formatted_relations = _format_all_text_segment_relation_mapping(
             text_id=text_id,
             all_text_segment_relations=relations
@@ -42,6 +42,7 @@ def upload_all_segments_mapping_to_webuddhist(
         if mapping.get("text_mappings", None) is not None and len(mapping["text_mappings"]) <= 0:
             return
 
+        logger.info("Uploading mapping to Webuddhist")
         response = _upload_mapping_to_webuddhist(
             mapping=mapping,
             destination_environment=destination_environment
@@ -117,7 +118,7 @@ def _prepare_webuddhist_mapping_payload(relations, text_id: str):
                 })
             if len(segment_mapping) == 0:
                 continue
-            text_mapping["mappings"].append(segment_mapping)
+            text_mapping["mappings"] = segment_mapping
             payload["text_mappings"].append(text_mapping)
         return payload
     except Exception as e:
@@ -171,9 +172,7 @@ def _format_all_text_segment_relation_mapping(
                 segments=mapping['segments']
             )
             segment.mappings.append(mapping_dict)
-        # logger.info(f"Segment: {segment}")
         response.segments.append(segment)
-    # logger.info(f"Response: {response}")
     return response
 
 
