@@ -1,15 +1,14 @@
 from app.db.postgres import SessionLocal
-from app.db.models import RootJob, SegmentMapping
-from sqlalchemy.inspection import inspect
 import requests
+from app.config import get
+import logging
+from time import sleep
+from app.db.models import SegmentMapping
 from app.models import (
     AllTextSegmentRelationMapping,
     SegmentsRelation,
     Mapping,
 )
-from app.config import get
-import logging
-from time import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -21,24 +20,28 @@ def upload_all_segments_mapping_to_webuddhist(
     destination_environment: str
 ):
     try:
+        logger.info(f"Total number of segment ids: {len(segment_ids)}")
         logger.info("Getting all the segments relations by manifestation")
         relations = get_all_segments_by_segment_ids(
             text_id=text_id,
             segment_ids=segment_ids
         )
+
+        logger.info(f"Total number of relations: {len(relations)}")
         formatted_relations = _format_all_text_segment_relation_mapping(
             text_id=text_id,
             all_text_segment_relations=relations
         )
+
         logger.info("Preparing the webuddhist mapping payload")
         mapping = _prepare_webuddhist_mapping_payload(
-            relations=formatted_relations
+            relations=formatted_relations,
+            text_id=text_id
         )
-        
-        logger.info(f"Mapping: {mapping}")
         
         if mapping.get("text_mappings", None) is not None and len(mapping["text_mappings"]) <= 0:
             return
+
         response = _upload_mapping_to_webuddhist(
             mapping=mapping,
             destination_environment=destination_environment
@@ -91,18 +94,15 @@ def _upload_mapping_to_webuddhist(mapping, destination_environment: str):
         raise e
 
 
-def _prepare_webuddhist_mapping_payload(relations):
+def _prepare_webuddhist_mapping_payload(relations, text_id: str):
     try:
 
         payload = {
             "text_mappings": []
         }
         for relation in relations.segments:
-            payload = {
-                "text_mappings": []
-            }
             text_mapping = {
-                "text_id": relations.text_id,
+                "text_id": text_id,
                 "segment_id": relation.segment_id,
                 "mappings": []
             }
@@ -115,12 +115,10 @@ def _prepare_webuddhist_mapping_payload(relations):
                         for segment in mapped.segments
                     ]
                 })
-            text_mapping["mappings"] = segment_mapping
-            if len(text_mapping["mappings"]) == 0:
+            if len(segment_mapping) == 0:
                 continue
+            text_mapping["mappings"].append(segment_mapping)
             payload["text_mappings"].append(text_mapping)
-            if payload.get("text_mappings", None) is not None and len(payload["text_mappings"]) <= 0:
-                continue
         return payload
     except Exception as e:
         raise e
