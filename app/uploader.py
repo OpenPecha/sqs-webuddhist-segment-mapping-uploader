@@ -13,6 +13,8 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
+BATCH_SIZE = 100
+
 
 def upload_all_segments_mapping_to_webuddhist(
     text_id: str,
@@ -28,7 +30,7 @@ def upload_all_segments_mapping_to_webuddhist(
         )
         logger.info(f"Total number of segment record retrieved: {len(relations)}")
 
-        logger.info("Formatting all segmentrecords fetched from the database")
+        logger.info("Formatting all segment records fetched from the database")
         formatted_relations = _format_all_text_segment_relation_mapping(
             text_id=text_id,
             all_text_segment_relations=relations
@@ -39,38 +41,68 @@ def upload_all_segments_mapping_to_webuddhist(
             relations=formatted_relations,
             text_id=text_id
         )
-        if mapping.get("text_mappings", None) is not None and len(mapping["text_mappings"]) <= 0:
+
+        text_mappings = mapping.get("text_mappings", [])
+        if not text_mappings:
+            logger.info("No text_mappings to upload, skipping")
             return
 
-        logger.info("Uploading mapping to Webuddhist")
-        response = _upload_mapping_to_webuddhist(
-            mapping=mapping,
-            destination_environment=destination_environment
+        token = get_token(destination_environment=destination_environment)
+        we_buddhist_url = get(
+            f"{destination_environment.upper()}_WEBUDDHIST_API_ENDPOINT"
         )
-        return response
+
+        batches = [
+            text_mappings[i: i + BATCH_SIZE]
+            for i in range(0, len(text_mappings), BATCH_SIZE)
+        ]
+        logger.info(
+            f"Uploading {len(text_mappings)} mappings in {len(batches)} "
+            f"batch(es) of up to {BATCH_SIZE}"
+        )
+
+        responses = []
+        for idx, batch in enumerate(batches, start=1):
+            logger.info(f"Uploading batch {idx}/{len(batches)} ({len(batch)} segments)")
+            batch_payload = {"text_mappings": batch}
+            response = _upload_mapping_to_webuddhist(
+                mapping=batch_payload,
+                destination_environment=destination_environment,
+                token=token,
+                we_buddhist_url=we_buddhist_url,
+            )
+            responses.append(response)
+
+        return responses
     except Exception as e:
         raise e
 
 
-def _upload_mapping_to_webuddhist(mapping, destination_environment: str):
+def _upload_mapping_to_webuddhist(
+    mapping,
+    destination_environment: str,
+    token: str = None,
+    we_buddhist_url: str = None,
+):
     logger.info(f"Mapping>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n{json.dumps(mapping)}\n")
     try:
-        token = get_token(destination_environment=destination_environment)
+        if token is None:
+            token = get_token(destination_environment=destination_environment)
+
+        if we_buddhist_url is None:
+            we_buddhist_url = get(
+                f"{destination_environment.upper()}_WEBUDDHIST_API_ENDPOINT"
+            )
 
         logger.info(f"Destination environment: {destination_environment}")
-
-        we_buddhist_url = get(
-            f"{destination_environment.upper()}_WEBUDDHIST_API_ENDPOINT"
-        )
-        
         logger.info(f"WeBuddhist URL: {we_buddhist_url}")
-        
+
         headers = {
             "Authorization": f"Bearer {token}"
         }
-        
-        logger.info(f"Uploading mapping to Webuddhist")
-        
+
+        logger.info("Uploading mapping to Webuddhist")
+
         response = requests.post(
             f"{we_buddhist_url}/mappings",
             json=mapping,
@@ -78,7 +110,7 @@ def _upload_mapping_to_webuddhist(mapping, destination_environment: str):
             timeout=600  # 10 minutes timeout - WeBuddhist on Render can be very slow
         )
         sleep(5)
-        logger.info("Uploaded mapping to webuddhist")
+        logger.info("Uploaded mapping to Webuddhist")
 
         logger.info(f"Response status: {response.status_code}")
         if response.status_code == 201:
